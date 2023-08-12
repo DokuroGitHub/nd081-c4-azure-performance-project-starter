@@ -10,60 +10,51 @@ from datetime import datetime
 # App Insights
 # TODO: Import required libraries for App Insights
 from opencensus.ext.azure.log_exporter import AzureLogHandler
-from opencensus.ext.azure.log_exporter import AzureEventHandler
 from opencensus.ext.azure import metrics_exporter
 from opencensus.stats import aggregation as aggregation_module
 from opencensus.stats import measure as measure_module
 from opencensus.stats import stats as stats_module
 from opencensus.stats import view as view_module
 from opencensus.tags import tag_map as tag_map_module
-from opencensus.trace import config_integration
 from opencensus.ext.azure.trace_exporter import AzureExporter
 from opencensus.trace.samplers import ProbabilitySampler
 from opencensus.trace.tracer import Tracer
 from opencensus.ext.flask.flask_middleware import FlaskMiddleware
 
-app_insight_connection_string = 'InstrumentationKey=46fc1bb9-fcf0-4ac0-8139-04fb883a1b77'
-
-# Logging
-# handler = AzureLogHandler(connection_string=app_insight_connection_string)
-# handler.setFormatter(logging.Formatter('%(traceId)s %(spanId)s %(message)s'))
-logger = logging.getLogger(__name__)
-# logger.addHandler(handler)
-logger.addHandler(AzureEventHandler(connection_string=app_insight_connection_string))
-# logger.setLevel(logging.INFO)
-
-
-# Metrics
-# stats = stats_module.stats
-# view_manager = stats.view_manager
-# exporter = metrics_exporter.new_metrics_exporter(
-# enable_standard_metrics=True,
-# connection_string=app_insight_connection_string)
-# view_manager.register_exporter(exporter)
-
-exporter = metrics_exporter.new_metrics_exporter(
-  enable_standard_metrics=True,
-  connection_string=app_insight_connection_string)
-
-# Tracing
-tracer = Tracer(
- exporter=AzureExporter(
-     connection_string=app_insight_connection_string),
- sampler=ProbabilitySampler(1.0),
-)
+from applicationinsights.flask.ext import AppInsights
+from applicationinsights import TelemetryClient
 
 app = Flask(__name__)
 
-# Requests
-middleware = FlaskMiddleware(
- app,
- exporter=AzureExporter(connection_string=app_insight_connection_string),
- sampler=ProbabilitySampler(rate=1.0)
-)
-
 # Load configurations from environment or config file
 app.config.from_pyfile('config_file.cfg')
+
+print("INSTRUMENTATION_KEY_FULL: {0}".format(app.config['INSTRUMENTATION_KEY_FULL']))
+
+# Logging
+logger = logging.getLogger(__name__)
+logger.addHandler(AzureLogHandler(
+    connection_string=app.config['INSTRUMENTATION_KEY_FULL'])
+)
+
+# Metrics
+exporter = metrics_exporter.new_metrics_exporter(
+    enable_standard_metrics=True,
+    connection_string=app.config['INSTRUMENTATION_KEY_FULL'])
+
+# Tracing
+tracer = Tracer(
+    exporter=AzureExporter(
+        connection_string=app.config['INSTRUMENTATION_KEY_FULL']),
+    sampler=ProbabilitySampler(1.0),
+)
+
+# Requests
+middleware = FlaskMiddleware(
+    app,
+    exporter=AzureExporter(connection_string=app.config['INSTRUMENTATION_KEY_FULL']),
+    sampler=ProbabilitySampler(rate=1.0),
+)
 
 if ("VOTE1VALUE" in os.environ and os.environ['VOTE1VALUE']):
     button1 = os.environ['VOTE1VALUE']
@@ -91,6 +82,8 @@ if app.config['SHOWHOST'] == "true":
 if not r.get(button1): r.set(button1,0)
 if not r.get(button2): r.set(button2,0)
 
+appinsights = AppInsights(app)
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
 
@@ -99,11 +92,13 @@ def index():
         # Get current values
         vote1 = r.get(button1).decode('utf-8')
         # TODO: use tracer object to trace cat vote
-        tracer.span(name="Cats Vote")
+        # tracer.span(name="Cats Vote")
+        tracer.span(name=button1)
         
         vote2 = r.get(button2).decode('utf-8')
         # TODO: use tracer object to trace dog vote
-        tracer.span(name="Dogs Vote")
+        # tracer.span(name="Dogs Vote")
+        tracer.span(name=button2)
 
         # Return index with values
         return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
@@ -112,18 +107,25 @@ def index():
 
         if request.form['vote'] == 'reset':
 
+            vote1 = r.get(button1).decode('utf-8')
+            vote2 = r.get(button2).decode('utf-8')
             # Empty table and return results
             r.set(button1,0)
             r.set(button2,0)
-            vote1 = r.get(button1).decode('utf-8')
-            properties = {'custom_dimensions': {'Cats Vote': vote1}}
-            # TODO: use logger object to log cat vote
-            logger.warning('Cats Vote', extra=properties)
 
-            vote2 = r.get(button2).decode('utf-8')
-            properties = {'custom_dimensions': {'Dogs Vote': vote2}}
-            # TODO: use logger object to log dog vote
-            logger.warning('Dogs Vote', extra=properties)
+            try:
+                if int(vote1) > 0:
+                    properties = {'custom_dimensions': {'Cats Vote': vote1}}
+                    # TODO: use logger object to log cat vote
+                    with tracer.span(name=vote1) as span:
+                        logger.warning('Cats Vote', extra=properties)
+                if int(vote2) > 0:
+                    properties = {'custom_dimensions': {'Dogs Vote': vote2}}
+                    # TODO: use logger object to log dog vote
+                    with tracer.span(name=vote2) as span:
+                        logger.warning('Dogs Vote', extra=properties)
+            except ValueError as e:
+                logger.error("Error - not integers {0}".format(e))
 
             return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
 
@@ -131,11 +133,20 @@ def index():
 
             # Insert vote result into DB
             vote = request.form['vote']
-            r.incr(vote,1)
+            with tracer.span(name=vote) as span:
+                r.incr(vote, 1)
 
             # Get current values
             vote1 = r.get(button1).decode('utf-8')
             vote2 = r.get(button2).decode('utf-8')
+
+            tc = TelemetryClient(app.config['INSTRUMENTATION_KEY'])
+            if vote == button1: #button1 = Cats
+                tc.track_event('Cats vote')
+            else: 
+                tc.track_event('Dogs vote')
+
+            tc.flush()
 
             # Return results
             return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
