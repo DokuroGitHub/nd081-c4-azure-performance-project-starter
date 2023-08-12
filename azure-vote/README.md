@@ -31,5 +31,7 @@ make
 redis-cli ping
 cd ..
 pip install -r requirements.txt
+cd azure-vote/  
+python3 main.py
 
 ```
