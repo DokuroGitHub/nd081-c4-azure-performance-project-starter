@@ -9,20 +9,51 @@ from datetime import datetime
 
 # App Insights
 # TODO: Import required libraries for App Insights
+from opencensus.ext.azure.log_exporter import AzureLogHandler
+from opencensus.ext.azure.log_exporter import AzureEventHandler
+from opencensus.ext.azure import metrics_exporter
+from opencensus.stats import aggregation as aggregation_module
+from opencensus.stats import measure as measure_module
+from opencensus.stats import stats as stats_module
+from opencensus.stats import view as view_module
+from opencensus.tags import tag_map as tag_map_module
+from opencensus.trace import config_integration
+from opencensus.ext.azure.trace_exporter import AzureExporter
+from opencensus.trace.samplers import ProbabilitySampler
+from opencensus.trace.tracer import Tracer
+from opencensus.ext.flask.flask_middleware import FlaskMiddleware
 
 # Logging
-logger = # TODO: Setup logger
+handler = AzureLogHandler(connection_string='InstrumentationKey=e1f55b84-3935-4c33-b542-7d4da87e408d;IngestionEndpoint=https://westus-0.in.applicationinsights.azure.com/')
+handler.setFormatter(logging.Formatter('%(traceId)s %(spanId)s %(message)s'))
+logger = logging.getLogger(__name__)
+logger.addHandler(handler)
+logger.addHandler(AzureEventHandler(connection_string='InstrumentationKey=e1f55b84-3935-4c33-b542-7d4da87e408d;IngestionEndpoint=https://westus-0.in.applicationinsights.azure.com/'))
+logger.setLevel(logging.INFO)
 
 # Metrics
-exporter = # TODO: Setup exporter
+stats = stats_module.stats
+view_manager = stats.view_manager
+exporter = metrics_exporter.new_metrics_exporter(
+enable_standard_metrics=True,
+connection_string='InstrumentationKey=e1f55b84-3935-4c33-b542-7d4da87e408d;IngestionEndpoint=https://westus-0.in.applicationinsights.azure.com/')
+view_manager.register_exporter(exporter)
 
 # Tracing
-tracer = # TODO: Setup tracer
+tracer = Tracer(
+ exporter=AzureExporter(
+     connection_string='InstrumentationKey=e1f55b84-3935-4c33-b542-7d4da87e408d;IngestionEndpoint=https://westus-0.in.applicationinsights.azure.com/'),
+ sampler=ProbabilitySampler(1.0),
+)
 
 app = Flask(__name__)
 
 # Requests
-middleware = # TODO: Setup flask middleware
+middleware = FlaskMiddleware(
+ app,
+ exporter=AzureExporter(connection_string="InstrumentationKey=e1f55b84-3935-4c33-b542-7d4da87e408d;IngestionEndpoint=https://westus-0.in.applicationinsights.azure.com/"),
+ sampler=ProbabilitySampler(rate=1.0)
+)
 
 # Load configurations from environment or config file
 app.config.from_pyfile('config_file.cfg')
