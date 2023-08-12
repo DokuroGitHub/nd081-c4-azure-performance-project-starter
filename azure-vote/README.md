@@ -18,6 +18,7 @@ python main.py
 
 az vmss list-instance-connection-info --resource-group acdnd-c4-project --name udacity-vmss 
 ssh -p 50000 udacityadmin@13.83.55.165
+ssh -p 50001 udacityadmin@13.83.55.165
 git clone https://github.com/DokuroGitHub/nd081-c4-azure-performance-project-starter.git
 cd nd081-c4-azure-performance-project-starter
 git checkout Deploy_to_VMSS
