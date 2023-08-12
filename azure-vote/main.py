@@ -119,11 +119,15 @@ def index():
                     # TODO: use logger object to log cat vote
                     with tracer.span(name=vote1) as span:
                         logger.warning('Cats Vote', extra=properties)
+                        print("Cats Vote")
+
                 if int(vote2) > 0:
                     properties = {'custom_dimensions': {'Dogs Vote': vote2}}
                     # TODO: use logger object to log dog vote
                     with tracer.span(name=vote2) as span:
                         logger.warning('Dogs Vote', extra=properties)
+                        print("Dogs Vote")
+
             except ValueError as e:
                 logger.error("Error - not integers {0}".format(e))
 
