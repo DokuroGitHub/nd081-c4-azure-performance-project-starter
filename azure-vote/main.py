@@ -23,12 +23,14 @@ from opencensus.trace.samplers import ProbabilitySampler
 from opencensus.trace.tracer import Tracer
 from opencensus.ext.flask.flask_middleware import FlaskMiddleware
 
+app_insight_connection_string = 'InstrumentationKey=46fc1bb9-fcf0-4ac0-8139-04fb883a1b77;IngestionEndpoint=https://eastus-8.in.applicationinsights.azure.com/'
+
 # Logging
-handler = AzureLogHandler(connection_string='InstrumentationKey=e1f55b84-3935-4c33-b542-7d4da87e408d;IngestionEndpoint=https://westus-0.in.applicationinsights.azure.com/')
+handler = AzureLogHandler(connection_string=app_insight_connection_string)
 handler.setFormatter(logging.Formatter('%(traceId)s %(spanId)s %(message)s'))
 logger = logging.getLogger(__name__)
 logger.addHandler(handler)
-logger.addHandler(AzureEventHandler(connection_string='InstrumentationKey=e1f55b84-3935-4c33-b542-7d4da87e408d;IngestionEndpoint=https://westus-0.in.applicationinsights.azure.com/'))
+logger.addHandler(AzureEventHandler(connection_string=app_insight_connection_string))
 logger.setLevel(logging.INFO)
 
 # Metrics
@@ -36,13 +38,13 @@ stats = stats_module.stats
 view_manager = stats.view_manager
 exporter = metrics_exporter.new_metrics_exporter(
 enable_standard_metrics=True,
-connection_string='InstrumentationKey=e1f55b84-3935-4c33-b542-7d4da87e408d;IngestionEndpoint=https://westus-0.in.applicationinsights.azure.com/')
+connection_string=app_insight_connection_string)
 view_manager.register_exporter(exporter)
 
 # Tracing
 tracer = Tracer(
  exporter=AzureExporter(
-     connection_string='InstrumentationKey=e1f55b84-3935-4c33-b542-7d4da87e408d;IngestionEndpoint=https://westus-0.in.applicationinsights.azure.com/'),
+     connection_string=app_insight_connection_string),
  sampler=ProbabilitySampler(1.0),
 )
 
@@ -51,7 +53,7 @@ app = Flask(__name__)
 # Requests
 middleware = FlaskMiddleware(
  app,
- exporter=AzureExporter(connection_string="InstrumentationKey=e1f55b84-3935-4c33-b542-7d4da87e408d;IngestionEndpoint=https://westus-0.in.applicationinsights.azure.com/"),
+ exporter=AzureExporter(connection_string=app_insight_connection_string),
  sampler=ProbabilitySampler(rate=1.0)
 )
 
@@ -92,8 +94,13 @@ def index():
         # Get current values
         vote1 = r.get(button1).decode('utf-8')
         # TODO: use tracer object to trace cat vote
+        with tracer.span(name="Cats Vote") as span:
+            print("Cats Vote")
+        
         vote2 = r.get(button2).decode('utf-8')
         # TODO: use tracer object to trace dog vote
+        with tracer.span(name="Dogs Vote") as span:
+            print("Dogs Vote")
 
         # Return index with values
         return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
@@ -108,10 +115,12 @@ def index():
             vote1 = r.get(button1).decode('utf-8')
             properties = {'custom_dimensions': {'Cats Vote': vote1}}
             # TODO: use logger object to log cat vote
+            logger.info('Cats Vote', extra=properties)
 
             vote2 = r.get(button2).decode('utf-8')
             properties = {'custom_dimensions': {'Dogs Vote': vote2}}
             # TODO: use logger object to log dog vote
+            logger.info('Dogs Vote', extra=properties)
 
             return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
 
@@ -130,6 +139,6 @@ def index():
 
 if __name__ == "__main__":
     # TODO: Use the statement below when running locally
-    app.run() 
+    # app.run() 
     # TODO: Use the statement below before deployment to VMSS
-    # app.run(host='0.0.0.0', threaded=True, debug=True) # remote
+    app.run(host='0.0.0.0', threaded=True, debug=True) # remote
