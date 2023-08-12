@@ -119,14 +119,14 @@ def index():
                     # TODO: use logger object to log cat vote
                     with tracer.span(name=vote1) as span:
                         logger.warning('Cats Vote', extra=properties)
-                        print("Cats Vote")
+                        print("Cats Vote: "+vote1)
 
                 if int(vote2) > 0:
                     properties = {'custom_dimensions': {'Dogs Vote': vote2}}
                     # TODO: use logger object to log dog vote
                     with tracer.span(name=vote2) as span:
                         logger.warning('Dogs Vote', extra=properties)
-                        print("Dogs Vote")
+                        print("Dogs Vote: "+vote2)
 
             except ValueError as e:
                 logger.error("Error - not integers {0}".format(e))
@@ -146,9 +146,12 @@ def index():
 
             tc = TelemetryClient(app.config['INSTRUMENTATION_KEY'])
             if vote == button1: #button1 = Cats
-                tc.track_event('Cats vote')
+                tc.track_event('Cats Vote')
+                print("Cats Vote")
+
             else: 
-                tc.track_event('Dogs vote')
+                tc.track_event('Dogs Vote')
+                print("Dogs Vote")
 
             tc.flush()
 
