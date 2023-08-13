@@ -2,7 +2,7 @@
 
 ```bash
 
-redis-server.exe
+redis-server.exe redis.windows.conf
 
 pyenv versions
 pyenv global 3.11.0
